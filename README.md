@@ -71,7 +71,7 @@ to use xloci through Conda just:
 
 ## Usage
 
- ```bash
+ ```shell
 Usage: xloci [OPTIONS] --sequence <SEQUENCE> --regions <REGIONS> --outdir <OUTDIR>
 
 Options:

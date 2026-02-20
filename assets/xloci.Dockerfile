@@ -3,7 +3,7 @@
 FROM rust:1.85-bookworm AS builder
 WORKDIR /app
 
-COPY xloci/Cargo.toml Cargo.lock ./
+COPY xloci/Cargo.toml xloci/Cargo.lock ./
 COPY xloci/src ./src
 
 RUN cargo build --release

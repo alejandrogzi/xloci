@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.93.0-bookworm as builder
 WORKDIR /app
 
 COPY xloci/Cargo.toml xloci/Cargo.lock ./

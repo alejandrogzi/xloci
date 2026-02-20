@@ -1,6 +1,6 @@
 <p align="center">
   <p align="center">
-    <img width=200 align="center" src="./assets/xloci.png" >
+    <img width=400 align="center" src="./assets/xloci.png" >
   </p>
 
   <span>

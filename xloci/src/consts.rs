@@ -1,3 +1,10 @@
+//! get sequences from 2bit/fa using bed/gtf/gff
+//! Alejandro Gonzales-Irribarren, 2025
+//!
+//! This tool provides an easy way to get any sequence (exon, intron, cds, utr, etc.)
+//! completely agnostic of the underlying format, either for reference sequences (2bit, fa, fa.gz)
+//! or regions (bed, gtf, gff, gz, bz2, zstd)
+
 pub const CODON_TABLE: [(&[u8], u8); 64] = [
     // Phenylalanine (F)
     (b"TTT", b'F'),

@@ -32,7 +32,7 @@
         <a href="https://docs.rs/xloci/0.0.1/xloci/">docs</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Usage">usage</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Installation">install</a> .
-        <a href="https://github.com/alejandrogzi/xloci/?tab=readme-ov-file#Conda">conda</a> .
+        <a href="https://github.com/alejandrogzi/xloci/?tab=readme-ov-file#Conda">conda</a>
     </samp>
   </p>
 
@@ -71,7 +71,7 @@ to use xloci through Conda just:
 
 ## Usage
 
- ```shell
+ ```plaintext
 Usage: xloci [OPTIONS] --sequence <SEQUENCE> --regions <REGIONS> --outdir <OUTDIR>
 
 Options:

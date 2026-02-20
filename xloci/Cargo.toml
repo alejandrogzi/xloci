@@ -1,0 +1,37 @@
+[package]
+name = "xloci"
+version = "0.0.1"
+edition = "2024"
+authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
+license = "MIT"
+description = "get sequences from 2bit/fa using bed/gtf/gff"
+keywords = ["xloci", "bioinformatics", "sequence", "bed"]
+readme = "../README.md"
+homepage = "https://github.com/alejandrogzi/xloci"
+repository = "https://github.com/alejandrogzi/xloci"
+categories = ["command-line-utilities", "science"]
+
+[dependencies]
+genepred = { version = "0.0.9", features = ["mmap", "rayon", "gzip"] }
+tempfile = "3.23.0"
+rayon = "1.5.1"
+twobit = "0.2.1"
+clap = { version = "4.0.29", features = ["derive"] }
+flate2 = "1.1.2"
+simple_logger = { version = "5.2.0" }
+log = { version = "0.4.29" }
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[[test]]
+name = "io_matrix"
+path = "tests/io_matrix.rs"
+test = true
+bench = false
+
+[[bin]]
+name = "xloci"
+path = "src/main.rs"

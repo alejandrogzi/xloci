@@ -10,8 +10,8 @@ use crate::{
     consts::CODON_TABLE,
 };
 
-use flate2::{read::MultiGzDecoder, write::GzEncoder, Compression};
-use genepred::{bed::BedFormat, Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer};
+use flate2::{Compression, read::MultiGzDecoder, write::GzEncoder};
+use genepred::{Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer, bed::BedFormat};
 use log::{info, warn};
 use rayon::prelude::*;
 use twobit::TwoBitFile;
@@ -19,7 +19,7 @@ use twobit::TwoBitFile;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    fs::{create_dir_all, File},
+    fs::{File, create_dir_all},
     io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},

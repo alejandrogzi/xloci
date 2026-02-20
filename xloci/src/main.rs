@@ -8,7 +8,7 @@
 use clap::Parser;
 use log::info;
 use simple_logger::init_with_level;
-use xloci::{xloci, Args};
+use xloci::{Args, xloci};
 
 /// Entry point
 ///

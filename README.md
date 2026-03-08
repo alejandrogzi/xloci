@@ -10,8 +10,8 @@
   </span>
 
   <p align="center">
-    <a href="https://img.shields.io/badge/version-0.0.1-green" target="_blank">
-      <img alt="Version Badge" src="https://img.shields.io/badge/version-0.0.1-green">
+    <a href="https://img.shields.io/badge/version-0.0.2-green" target="_blank">
+      <img alt="Version Badge" src="https://img.shields.io/badge/version-0.0.2-green">
     </a>
     <a href="https://crates.io/crates/xloci" target="_blank">
       <img alt="Crates.io Version" src="https://img.shields.io/crates/v/xloci">
@@ -29,7 +29,7 @@
         <span> get sequences from 2bit/fa using bed/gtf/gff</span>
         <br>
         <br>
-        <a href="https://docs.rs/xloci/0.0.1/xloci/">docs</a> .
+        <a href="https://docs.rs/xloci/0.0.2/xloci/">docs</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Usage">usage</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Installation">install</a> .
         <a href="https://github.com/alejandrogzi/xloci/?tab=readme-ov-file#Conda">conda</a>

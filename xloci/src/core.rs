@@ -10,8 +10,8 @@ use crate::{
     consts::CODON_TABLE,
 };
 
-use flate2::{Compression, read::MultiGzDecoder, write::GzEncoder};
-use genepred::{Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer, bed::BedFormat};
+use flate2::{read::MultiGzDecoder, write::GzEncoder, Compression};
+use genepred::{bed::BedFormat, Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer};
 use log::{info, warn};
 use rayon::prelude::*;
 use twobit::TwoBitFile;
@@ -19,7 +19,7 @@ use twobit::TwoBitFile;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    fs::{File, create_dir_all},
+    fs::{create_dir_all, File},
     io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -840,7 +840,7 @@ pub fn get_sequences(sequence: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
     match sequence.extension() {
         Some(ext) => match ext.to_str() {
             Some("2bit") => from_2bit(sequence),
-            Some("fa") | Some("gz") => from_fa(sequence),
+            Some("fa") | Some("fasta") | Some("fna") | Some("gz") => from_fa(sequence),
             _ => panic!("ERROR: Unsupported file format"),
         },
         None => panic!("ERROR: No file extension"),

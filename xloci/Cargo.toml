@@ -1,6 +1,6 @@
 [package]
 name = "xloci"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
 license = "MIT"
@@ -12,7 +12,7 @@ repository = "https://github.com/alejandrogzi/xloci"
 categories = ["command-line-utilities", "science"]
 
 [dependencies]
-genepred = { version = "0.0.9", features = ["mmap", "rayon", "gzip"] }
+genepred = { version = "0.0.10", features = ["mmap", "rayon", "gzip"] }
 tempfile = "3.23.0"
 rayon = "1.5.1"
 twobit = "0.2.1"

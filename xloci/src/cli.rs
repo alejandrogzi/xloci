@@ -18,8 +18,8 @@ use std::{fmt, path::PathBuf, str::FromStr};
     long_about = None
 )]
 pub struct Args {
-    /// Path to genome sequence file (.fa, .fa.gz, or .2bit)
-    #[arg(short = 's', long)]
+    /// Path to genome sequence file (.fa, .fa.gz, or .2bit); reads from stdin when omitted
+    #[arg(short = 's', long, default_value = "-", hide_default_value = true)]
     pub sequence: PathBuf,
 
     /// Path to genomic regions file (BED, GTF, or GFF format)
@@ -54,8 +54,8 @@ pub struct Args {
     #[arg(short = 'L', long, default_value = "info")]
     pub level: Level,
 
-    /// Prefix for output files
-    #[arg(short = 'p', long, default_value = "output.fa")]
+    /// Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz)
+    #[arg(short = 'p', long, default_value = "output")]
     pub prefix: String,
 
     /// Translate sequences to protein
@@ -73,6 +73,16 @@ pub struct Args {
     /// Gzip-compress output files
     #[arg(short = 'Z', long, default_value = "false", action = ArgAction::SetTrue)]
     pub compress: bool,
+
+    /// Number of threads to use
+    #[clap(
+        short = 't',
+        long,
+        help = "Number of threads",
+        value_name = "THREADS",
+        default_value_t = num_cpus::get()
+    )]
+    pub threads: usize,
 }
 
 /// Formats the Args struct as a comma-separated string of key=value pairs.
@@ -90,10 +100,16 @@ pub struct Args {
 /// ```
 impl fmt::Display for Args {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let sequence = if self.sequence == *"-" {
+            "<stdin>".to_string()
+        } else {
+            self.sequence.display().to_string()
+        };
+
         write!(
             f,
             "sequence={}, regions={}, outdir={}, chunks={}, upstream_flank={}, downstream_flank={}, feature={:?}, ignore_errors={}, level={}, prefix={}, translate={}, as_chunk={}, include_bed={}, compress={}",
-            self.sequence.display(),
+            sequence,
             self.regions.display(),
             self.outdir.display(),
             self.chunks,

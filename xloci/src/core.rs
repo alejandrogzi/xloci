@@ -20,10 +20,14 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     fs::{File, create_dir_all},
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
+
+const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
+const TWOBIT_MAGIC: [u8; 4] = [0x43, 0x27, 0x41, 0x1a];
+const TWOBIT_REV_MAGIC: [u8; 4] = [0x1a, 0x41, 0x27, 0x43];
 
 /// Main processing function that orchestrates genomic sequence extraction.
 ///
@@ -132,7 +136,7 @@ pub fn xloci(args: Args) {
 /// - `downstream_flank`: Bases to extend downstream of last exon
 /// - `feature_type`: Type of genomic feature to extract
 /// - `ignore_errors`: Whether to continue on errors
-/// - `prefix`: Prefix for output file names
+/// - `prefix`: Stem for output FASTA file names
 /// - `translate`: Whether to translate sequences to protein
 /// - `as_chunk`: Keep chunks separate instead of merging
 /// - `include_bed`: Also write BED outputs for each chunk
@@ -155,7 +159,7 @@ pub fn xloci(args: Args) {
 ///     0,
 ///     Feature::Exon,
 ///     false,
-///     "output.fa",
+///     "output",
 ///     false,
 ///     false,
 ///     false,
@@ -226,7 +230,7 @@ fn process_reader<R>(
 
     chunk_paths.sort_by_key(|(idx, _)| *idx);
 
-    let output_path = with_gzip_extension(outdir.join(prefix), compress);
+    let output_path = fasta_output_path(outdir, prefix, compress);
     let output_file = File::create(&output_path)
         .unwrap_or_else(|e| panic!("ERROR: cannot create {}: {}", output_path.display(), e));
 
@@ -341,6 +345,15 @@ fn with_gzip_extension(mut path: PathBuf, compress: bool) -> PathBuf {
     path
 }
 
+fn fasta_output_path(outdir: &Path, prefix: &str, compress: bool) -> PathBuf {
+    let stem = prefix
+        .strip_suffix(".fa.gz")
+        .or_else(|| prefix.strip_suffix(".fa"))
+        .unwrap_or(prefix);
+    let path = outdir.join(format!("{stem}.fa"));
+    with_gzip_extension(path, compress)
+}
+
 /// Processes a chunk of genomic records and writes extracted sequences to a temporary file.
 ///
 /// # Arguments
@@ -440,10 +453,18 @@ fn write_chunk(
         })
         .for_each(|record| {
             let seq = genome.get(&record.chrom).unwrap_or_else(|| {
-                panic!(
-                    "ERROR: Chromosome {} not found!",
-                    String::from_utf8_lossy(&record.chrom)
-                )
+                let keys = genome
+                    .keys()
+                    .map(|k| std::str::from_utf8(k).unwrap())
+                    .collect::<Vec<_>>();
+
+                log::error!(
+                    "ERROR: Chromosome {} from record {} not found in genome with keys {:?}!",
+                    String::from_utf8_lossy(&record.chrom),
+                    record,
+                    keys
+                );
+                std::process::exit(1);
             });
 
             let target = extract_seq(
@@ -836,6 +857,10 @@ fn detect_region_format(path: &Path) -> Option<RegionFormat> {
 /// let genome = get_sequences(PathBuf::from("genome.fa.gz"));
 /// ```
 pub fn get_sequences(sequence: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
+    if sequence == *"-" {
+        return from_stdin();
+    }
+
     info!("Reading sequences from file {}", sequence.display());
     match sequence.extension() {
         Some(ext) => match ext.to_str() {
@@ -845,6 +870,57 @@ pub fn get_sequences(sequence: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
         },
         None => panic!("ERROR: No file extension"),
     }
+}
+
+/// Loads genome sequences from stdin.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use std::io::Write;
+/// use std::process::{Command, Stdio};
+///
+/// let mut child = Command::new("cat")
+///     .arg("genome.fa")
+///     .stdout(Stdio::piped())
+///     .spawn()
+///     .unwrap_or_else(|e| panic!("ERROR: cannot spawn cat: {}", e));
+///
+/// let genome = from_stdin();
+/// ```
+fn from_stdin() -> HashMap<Vec<u8>, Vec<u8>> {
+    info!("Reading sequences from stdin");
+
+    let mut input = Vec::new();
+    std::io::stdin()
+        .read_to_end(&mut input)
+        .unwrap_or_else(|e| panic!("ERROR: cannot read stdin: {}", e));
+
+    if input.is_empty() {
+        panic!("ERROR: Missing --sequence and stdin is empty");
+    }
+
+    if input.starts_with(&GZIP_MAGIC) {
+        return parse_fasta_reader(
+            BufReader::new(MultiGzDecoder::new(Cursor::new(input))),
+            "stdin",
+        );
+    }
+
+    if input.starts_with(&TWOBIT_MAGIC) || input.starts_with(&TWOBIT_REV_MAGIC) {
+        return from_2bit_buf(input, "stdin");
+    }
+
+    if input
+        .iter()
+        .copied()
+        .find(|b| !b.is_ascii_whitespace())
+        .is_some_and(|b| b == b'>')
+    {
+        return parse_fasta_reader(BufReader::new(Cursor::new(input)), "stdin");
+    }
+
+    panic!("ERROR: Unsupported stdin sequence format");
 }
 
 /// Loads genome sequences from a 2bit compressed format file.
@@ -862,8 +938,21 @@ pub fn get_sequences(sequence: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
 /// let chr1 = sequences.get(b"chr1");
 /// ```
 fn from_2bit(twobit: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
-    let mut genome = TwoBitFile::open_and_read(&twobit).expect("ERROR: Cannot open 2bit file");
+    let genome = TwoBitFile::open_and_read(&twobit).expect("ERROR: Cannot open 2bit file");
+    let source = format!("file {}", twobit.display());
+    collect_2bit_sequences(genome, &source)
+}
 
+fn from_2bit_buf(buf: Vec<u8>, source: &str) -> HashMap<Vec<u8>, Vec<u8>> {
+    let genome = TwoBitFile::from_buf(buf)
+        .unwrap_or_else(|e| panic!("ERROR: Cannot read 2bit from {}: {}", source, e));
+    collect_2bit_sequences(genome, source)
+}
+
+fn collect_2bit_sequences<R: Read + Seek>(
+    mut genome: TwoBitFile<R>,
+    source: &str,
+) -> HashMap<Vec<u8>, Vec<u8>> {
     let mut sequences = HashMap::new();
     genome.chrom_names().iter().for_each(|chr| {
         let seq = genome
@@ -875,11 +964,7 @@ fn from_2bit(twobit: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
         sequences.insert(chr.as_bytes().to_vec(), seq);
     });
 
-    info!(
-        "Read {} sequences from file {:}",
-        sequences.len(),
-        twobit.display()
-    );
+    info!("Read {} sequences from {}", sequences.len(), source);
 
     sequences
 }
@@ -899,16 +984,21 @@ fn from_2bit(twobit: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
 /// let sequences = from_fa(PathBuf::from("genome.fa.gz"));
 /// let chr1 = sequences.get(b"chr1");
 /// ```
-pub fn from_fa<F: AsRef<Path> + Debug>(f: F) -> HashMap<Vec<u8>, Vec<u8>> {
+pub fn from_fa<P: AsRef<Path>>(f: P) -> HashMap<Vec<u8>, Vec<u8>> {
     let path = f.as_ref();
     let file = File::open(path)
         .unwrap_or_else(|e| panic!("ERROR: cannot open FASTA {}: {}", path.display(), e));
 
-    let mut reader: Box<dyn BufRead> = match path.extension().and_then(|ext| ext.to_str()) {
+    let reader: Box<dyn BufRead> = match path.extension().and_then(|ext| ext.to_str()) {
         Some("gz") => Box::new(BufReader::new(MultiGzDecoder::new(file))),
         _ => Box::new(BufReader::new(file)),
     };
 
+    let source = format!("file {}", path.display());
+    parse_fasta_reader(reader, &source)
+}
+
+fn parse_fasta_reader<R: BufRead>(mut reader: R, source: &str) -> HashMap<Vec<u8>, Vec<u8>> {
     let mut acc = HashMap::new();
     let mut line = Vec::new();
     let mut header: Option<Vec<u8>> = None;
@@ -918,7 +1008,7 @@ pub fn from_fa<F: AsRef<Path> + Debug>(f: F) -> HashMap<Vec<u8>, Vec<u8>> {
         line.clear();
         let bytes_read = reader
             .read_until(b'\n', &mut line)
-            .unwrap_or_else(|e| panic!("ERROR: cannot read FASTA {}: {}", path.display(), e));
+            .unwrap_or_else(|e| panic!("ERROR: cannot read FASTA {}: {}", source, e));
 
         if bytes_read == 0 {
             break;
@@ -949,7 +1039,7 @@ pub fn from_fa<F: AsRef<Path> + Debug>(f: F) -> HashMap<Vec<u8>, Vec<u8>> {
         acc.insert(last_header, seq);
     }
 
-    info!("Read {} sequences from file {:#?}", acc.len(), f);
+    info!("Read {} sequences from {}", acc.len(), source);
 
     acc
 }

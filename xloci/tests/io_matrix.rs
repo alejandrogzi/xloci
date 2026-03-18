@@ -4,6 +4,7 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
 use tempfile::TempDir;
 use twobit::convert::{fasta::FastaReader, to_2bit};
@@ -61,11 +62,12 @@ fn run_case(case: Case) {
         feature: Feature::Exon,
         ignore_errors: false,
         level: log::Level::Info,
-        prefix: "output.fa".to_string(),
+        prefix: "output".to_string(),
         translate: false,
         as_chunk: false,
         include_bed: false,
         compress: false,
+        threads: 1,
     });
 
     let records = read_fasta(outdir.join("output.fa"));
@@ -87,6 +89,81 @@ fn run_case(case: Case) {
         records.len(),
         2,
         "unexpected record count for {}",
+        case_name(&case)
+    );
+}
+
+fn run_stdin_case(case: Case) {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+
+    let fasta_path = root.join("genome.fa");
+    write_bytes(&fasta_path, GENOME_FASTA.as_bytes());
+
+    let twobit_path = root.join("genome.2bit");
+    write_twobit(&fasta_path, &twobit_path);
+
+    let stdin_bytes = match case.sequence_format {
+        SequenceFormat::Fa => GENOME_FASTA.as_bytes().to_vec(),
+        SequenceFormat::TwoBit => std::fs::read(&twobit_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", twobit_path.display(), e)),
+    };
+
+    let regions_path = write_regions(root, case.region_format, case.region_gz);
+    let outdir = root.join("out");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_xloci"));
+
+    let mut child = Command::new(binary)
+        .arg("-r")
+        .arg(&regions_path)
+        .arg("-o")
+        .arg(&outdir)
+        .arg("-c")
+        .arg("1")
+        .arg("-L")
+        .arg("error")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn xloci binary");
+
+    let mut stdin = child.stdin.take().expect("failed to open child stdin");
+    stdin
+        .write_all(&stdin_bytes)
+        .unwrap_or_else(|e| panic!("failed to write stdin for {}: {}", case_name(&case), e));
+    drop(stdin);
+
+    let output = child
+        .wait_with_output()
+        .expect("failed to wait for xloci binary");
+
+    assert!(
+        output.status.success(),
+        "stdin case {} failed: {}",
+        case_name(&case),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let records = read_fasta(outdir.join("output.fa"));
+    let (plus_name, minus_name) = expected_names(case.region_format);
+
+    assert_eq!(
+        records.get(plus_name).map(std::string::String::as_str),
+        Some("AACC"),
+        "plus-strand sequence mismatch for stdin {}",
+        case_name(&case)
+    );
+    assert_eq!(
+        records.get(minus_name).map(std::string::String::as_str),
+        Some("CGTA"),
+        "minus-strand sequence mismatch for stdin {}",
+        case_name(&case)
+    );
+    assert_eq!(
+        records.len(),
+        2,
+        "unexpected record count for stdin {}",
         case_name(&case)
     );
 }
@@ -257,6 +334,24 @@ fn test_fa_bed_gz() {
     run_case(Case {
         sequence_format: SequenceFormat::Fa,
         region_format: RegionFormat::Bed,
+        region_gz: true,
+    });
+}
+
+#[test]
+fn test_stdin_fa_bed() {
+    run_stdin_case(Case {
+        sequence_format: SequenceFormat::Fa,
+        region_format: RegionFormat::Bed,
+        region_gz: false,
+    });
+}
+
+#[test]
+fn test_stdin_2bit_gff_gz() {
+    run_stdin_case(Case {
+        sequence_format: SequenceFormat::TwoBit,
+        region_format: RegionFormat::Gff,
         region_gz: true,
     });
 }

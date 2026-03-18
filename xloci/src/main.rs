@@ -23,10 +23,17 @@ use xloci::{Args, xloci};
 /// }
 /// ```
 fn main() {
+    let start = std::time::Instant::now();
     let args = Args::parse();
 
     init_with_level(args.level).unwrap_or_else(|e| panic!("{}", e));
     info!("Starting xloci with args: {}", args);
 
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.threads)
+        .build_global()
+        .unwrap_or_else(|e| panic!("{}", e));
+
     xloci(args);
+    info!("Finished xloci in {:?}", start.elapsed());
 }

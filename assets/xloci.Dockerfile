@@ -10,9 +10,12 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/xloci /usr/local/bin/xloci
 
-ENTRYPOINT ["xloci"]
+RUN xloci --version
+RUN xloci -h

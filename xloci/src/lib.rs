@@ -8,10 +8,10 @@
 //! # Usage
 //!
 //! ```bash
-//! Usage: xloci [OPTIONS] --sequence <SEQUENCE> --regions <REGIONS> --outdir <OUTDIR>
+//! Usage: xloci [OPTIONS] --regions <REGIONS> --outdir <OUTDIR>
 //!
 //! Options:
-//!   -s, --sequence <SEQUENCE>    Path to genome sequence file (.fa, .fa.gz, or .2bit)
+//!   -s, --sequence <SEQUENCE>    Path to genome sequence file (.fa, .fa.gz, or .2bit); reads from stdin when omitted
 //!   -r, --regions <REGIONS>      Path to genomic regions file (BED, GTF, or GFF format)
 //!   -o, --outdir <OUTDIR>        Output directory for extracted sequences
 //!   -c, --chunks <CHUNKS>        Number of records per parallel processing chunk [default: 1000]
@@ -22,7 +22,7 @@
 //!   -f, --feature <FEATURE>      Type of genomic feature to extract [default: exon] [possible values: transcript, exon, intron, cds, utr]
 //!   -I, --ignore-errors          Continue processing on errors instead of panicking
 //!   -L, --level <LEVEL>          Logging verbosity level [default: info]  [possible values: trace, debug, info, warn, error]
-//!   -p, --prefix <PREFIX>        Prefix for output files [default: output.fa]
+//!   -p, --prefix <PREFIX>        Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz) [default: output]
 //!   -X, --translate              Translate sequences to protein
 //!   -A, --as-chunk               Keep chunk outputs and skip merging into a single file
 //!   -B, --include-bed            Also emit chunked BED outputs (requires --as-chunk)

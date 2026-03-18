@@ -8,10 +8,10 @@
 //! # Usage
 //!
 //! ```bash
-//! Usage: xloci [OPTIONS] --sequence <SEQUENCE> --regions <REGIONS> --outdir <OUTDIR>
+//! Usage: xloci [OPTIONS] --regions <REGIONS> --outdir <OUTDIR>
 //!
 //! Options:
-//!   -s, --sequence <SEQUENCE>    Path to genome sequence file (.fa, .fa.gz, or .2bit)
+//!   -s, --sequence <SEQUENCE>    Path to genome sequence file (.fa, .fa.gz, or .2bit); reads from stdin when omitted
 //!   -r, --regions <REGIONS>      Path to genomic regions file (BED, GTF, or GFF format)
 //!   -o, --outdir <OUTDIR>        Output directory for extracted sequences
 //!   -c, --chunks <CHUNKS>        Number of records per parallel processing chunk [default: 1000]

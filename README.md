@@ -94,7 +94,7 @@ Options:
   -L, --level <LEVEL>
           Logging verbosity level [default: info]
   -p, --prefix <PREFIX>
-          Prefix for output files [default: output.fa]
+          Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz) [default: output]
   -X, --translate
           Translate sequences to protein
   -A, --as-chunk

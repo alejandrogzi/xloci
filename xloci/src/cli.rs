@@ -54,8 +54,8 @@ pub struct Args {
     #[arg(short = 'L', long, default_value = "info")]
     pub level: Level,
 
-    /// Prefix for output files
-    #[arg(short = 'p', long, default_value = "output.fa")]
+    /// Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz)
+    #[arg(short = 'p', long, default_value = "output")]
     pub prefix: String,
 
     /// Translate sequences to protein
@@ -100,7 +100,7 @@ pub struct Args {
 /// ```
 impl fmt::Display for Args {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sequence = if self.sequence == PathBuf::from("-") {
+        let sequence = if self.sequence == *"-" {
             "<stdin>".to_string()
         } else {
             self.sequence.display().to_string()

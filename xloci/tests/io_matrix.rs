@@ -62,7 +62,7 @@ fn run_case(case: Case) {
         feature: Feature::Exon,
         ignore_errors: false,
         level: log::Level::Info,
-        prefix: "output.fa".to_string(),
+        prefix: "output".to_string(),
         translate: false,
         as_chunk: false,
         include_bed: false,

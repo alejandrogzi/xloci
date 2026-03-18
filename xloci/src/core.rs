@@ -10,8 +10,8 @@ use crate::{
     consts::CODON_TABLE,
 };
 
-use flate2::{read::MultiGzDecoder, write::GzEncoder, Compression};
-use genepred::{bed::BedFormat, Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer};
+use flate2::{Compression, read::MultiGzDecoder, write::GzEncoder};
+use genepred::{Bed12, GenePred, Gff, Gtf, Reader, ReaderResult, Strand, Writer, bed::BedFormat};
 use log::{info, warn};
 use rayon::prelude::*;
 use twobit::TwoBitFile;
@@ -19,7 +19,7 @@ use twobit::TwoBitFile;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    fs::{create_dir_all, File},
+    fs::{File, create_dir_all},
     io::{BufRead, BufReader, BufWriter, Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -136,7 +136,7 @@ pub fn xloci(args: Args) {
 /// - `downstream_flank`: Bases to extend downstream of last exon
 /// - `feature_type`: Type of genomic feature to extract
 /// - `ignore_errors`: Whether to continue on errors
-/// - `prefix`: Prefix for output file names
+/// - `prefix`: Stem for output FASTA file names
 /// - `translate`: Whether to translate sequences to protein
 /// - `as_chunk`: Keep chunks separate instead of merging
 /// - `include_bed`: Also write BED outputs for each chunk
@@ -159,7 +159,7 @@ pub fn xloci(args: Args) {
 ///     0,
 ///     Feature::Exon,
 ///     false,
-///     "output.fa",
+///     "output",
 ///     false,
 ///     false,
 ///     false,
@@ -230,8 +230,7 @@ fn process_reader<R>(
 
     chunk_paths.sort_by_key(|(idx, _)| *idx);
 
-    let prefix = format!("{}.fa", prefix);
-    let output_path = with_gzip_extension(outdir.join(prefix), compress);
+    let output_path = fasta_output_path(outdir, prefix, compress);
     let output_file = File::create(&output_path)
         .unwrap_or_else(|e| panic!("ERROR: cannot create {}: {}", output_path.display(), e));
 
@@ -346,6 +345,15 @@ fn with_gzip_extension(mut path: PathBuf, compress: bool) -> PathBuf {
     path
 }
 
+fn fasta_output_path(outdir: &Path, prefix: &str, compress: bool) -> PathBuf {
+    let stem = prefix
+        .strip_suffix(".fa.gz")
+        .or_else(|| prefix.strip_suffix(".fa"))
+        .unwrap_or(prefix);
+    let path = outdir.join(format!("{stem}.fa"));
+    with_gzip_extension(path, compress)
+}
+
 /// Processes a chunk of genomic records and writes extracted sequences to a temporary file.
 ///
 /// # Arguments
@@ -447,7 +455,6 @@ fn write_chunk(
             let seq = genome.get(&record.chrom).unwrap_or_else(|| {
                 let keys = genome
                     .keys()
-                    .into_iter()
                     .map(|k| std::str::from_utf8(k).unwrap())
                     .collect::<Vec<_>>();
 
@@ -850,7 +857,7 @@ fn detect_region_format(path: &Path) -> Option<RegionFormat> {
 /// let genome = get_sequences(PathBuf::from("genome.fa.gz"));
 /// ```
 pub fn get_sequences(sequence: PathBuf) -> HashMap<Vec<u8>, Vec<u8>> {
-    if sequence == PathBuf::from("-") {
+    if sequence == *"-" {
         return from_stdin();
     }
 

@@ -10,8 +10,8 @@
   </span>
 
   <p align="center">
-    <a href="https://img.shields.io/badge/version-0.0.2-green" target="_blank">
-      <img alt="Version Badge" src="https://img.shields.io/badge/version-0.0.2-green">
+    <a href="https://img.shields.io/badge/version-0.0.4-green" target="_blank">
+      <img alt="Version Badge" src="https://img.shields.io/badge/version-0.0.4-green">
     </a>
     <a href="https://crates.io/crates/xloci" target="_blank">
       <img alt="Crates.io Version" src="https://img.shields.io/crates/v/xloci">
@@ -29,7 +29,7 @@
         <span> get sequences from 2bit/fa using bed/gtf/gff</span>
         <br>
         <br>
-        <a href="https://docs.rs/xloci/0.0.2/xloci/">docs</a> .
+        <a href="https://docs.rs/xloci/0.0.4/xloci/">docs</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Usage">usage</a> .
         <a href="https://github.com/alejandrogzi/xloci?tab=readme-ov-file#Installation">install</a> .
         <a href="https://github.com/alejandrogzi/xloci/?tab=readme-ov-file#Conda">conda</a>
@@ -69,6 +69,11 @@ to build the development container image:
 to use xloci through Conda just:
 1. `conda install xloci -c bioconda` or `conda create -n xloci -c bioconda xloci`
 
+### Nextflow
+to use xloci through Nextflow just:
+1. `nextflow run alejandrogzi/xloci -r <REGIONS> -s <SEQUENCE>`
+or borrow the [xloci.nf](https://github.com/alejandrogzi/xloci/blob/main/assets/nextflow/xloci/main.nf) file from this repo
+
 ## Usage
 
  ```plaintext
@@ -76,7 +81,7 @@ Usage: xloci [OPTIONS] --sequence <SEQUENCE> --regions <REGIONS> --outdir <OUTDI
 
 Options:
   -s, --sequence <SEQUENCE>
-          Path to genome sequence file (.fa, .fa.gz, or .2bit)
+          Path to genome sequence file (.fa, .fa.gz, or .2bit); reads from stdin when omitted
   -r, --regions <REGIONS>
           Path to genomic regions file (BED, GTF, or GFF format)
   -o, --outdir <OUTDIR>
@@ -97,12 +102,22 @@ Options:
           Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz) [default: output]
   -X, --translate
           Translate sequences to protein
+  -S, --split-extraction
+          Emit one output record per extracted feature piece
+      --as-tsv
+          Write tab-separated output instead of FASTA
+      --add-tab
+          Separate flank columns in TSV output (requires --as-tsv and at least one flank)
+  -G, --generic-id
+          Use genomic coordinates as identifiers instead of record names
   -A, --as-chunk
           Keep chunk outputs and skip merging into a single file
   -B, --include-bed
           Also emit chunked BED outputs (requires --as-chunk)
   -Z, --compress
           Gzip-compress output files
+  -t, --threads <THREADS>
+          Number of threads [default: 16]
   -h, --help
           Print help
   -V, --version

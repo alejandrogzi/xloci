@@ -62,6 +62,22 @@ pub struct Args {
     #[arg(short = 'X', long, default_value = "false", action = ArgAction::SetTrue)]
     pub translate: bool,
 
+    /// Emit one output record per extracted feature piece
+    #[arg(short = 'S', long = "split-extraction", default_value = "false", action = ArgAction::SetTrue)]
+    pub split_extraction: bool,
+
+    /// Write tab-separated output instead of FASTA
+    #[arg(long = "as-tsv", default_value = "false", action = ArgAction::SetTrue)]
+    pub as_tsv: bool,
+
+    /// Separate flank columns in TSV output (requires --as-tsv and at least one flank)
+    #[arg(long = "add-tab", default_value = "false", action = ArgAction::SetTrue)]
+    pub add_tab: bool,
+
+    /// Use genomic coordinates as identifiers instead of record names
+    #[arg(short = 'G', long = "generic-id", default_value = "false", action = ArgAction::SetTrue)]
+    pub generic_id: bool,
+
     /// Keep chunk outputs and skip merging into a single file
     #[arg(short = 'A', long = "as-chunk", default_value = "false", action = ArgAction::SetTrue)]
     pub as_chunk: bool,
@@ -108,7 +124,7 @@ impl fmt::Display for Args {
 
         write!(
             f,
-            "sequence={}, regions={}, outdir={}, chunks={}, upstream_flank={}, downstream_flank={}, feature={:?}, ignore_errors={}, level={}, prefix={}, translate={}, as_chunk={}, include_bed={}, compress={}",
+            "sequence={}, regions={}, outdir={}, chunks={}, upstream_flank={}, downstream_flank={}, feature={:?}, ignore_errors={}, level={}, prefix={}, translate={}, split_extraction={}, as_tsv={}, add_tab={}, generic_id={}, as_chunk={}, include_bed={}, compress={}",
             sequence,
             self.regions.display(),
             self.outdir.display(),
@@ -120,6 +136,10 @@ impl fmt::Display for Args {
             self.level,
             self.prefix,
             self.translate,
+            self.split_extraction,
+            self.as_tsv,
+            self.add_tab,
+            self.generic_id,
             self.as_chunk,
             self.include_bed,
             self.compress,

@@ -34,6 +34,30 @@ struct Case {
     region_gz: bool,
 }
 
+fn base_args(sequence: PathBuf, regions: PathBuf, outdir: PathBuf) -> Args {
+    Args {
+        sequence,
+        regions,
+        outdir,
+        chunks: 1,
+        upstream_flank: 0,
+        downstream_flank: 0,
+        feature: Feature::Exon,
+        ignore_errors: false,
+        level: log::Level::Info,
+        prefix: "output".to_string(),
+        translate: false,
+        split_extraction: false,
+        as_tsv: false,
+        add_tab: false,
+        generic_id: false,
+        as_chunk: false,
+        include_bed: false,
+        compress: false,
+        threads: 1,
+    }
+}
+
 fn run_case(case: Case) {
     let temp = TempDir::new().expect("failed to create temporary directory");
     let root = temp.path();
@@ -52,23 +76,7 @@ fn run_case(case: Case) {
     let regions_path = write_regions(root, case.region_format, case.region_gz);
     let outdir = root.join("out");
 
-    xloci(Args {
-        sequence: sequence_path,
-        regions: regions_path,
-        outdir: outdir.clone(),
-        chunks: 1,
-        upstream_flank: 0,
-        downstream_flank: 0,
-        feature: Feature::Exon,
-        ignore_errors: false,
-        level: log::Level::Info,
-        prefix: "output".to_string(),
-        translate: false,
-        as_chunk: false,
-        include_bed: false,
-        compress: false,
-        threads: 1,
-    });
+    xloci(base_args(sequence_path, regions_path, outdir.clone()));
 
     let records = read_fasta(outdir.join("output.fa"));
     let (plus_name, minus_name) = expected_names(case.region_format);
@@ -266,6 +274,21 @@ fn read_fasta(path: PathBuf) -> HashMap<String, String> {
     records
 }
 
+fn read_tsv(path: PathBuf) -> Vec<Vec<String>> {
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e));
+
+    text.lines()
+        .map(|line| line.split('\t').map(|field| field.to_string()).collect())
+        .collect()
+}
+
+fn rows_to_map(rows: Vec<Vec<String>>) -> HashMap<String, Vec<String>> {
+    rows.into_iter()
+        .map(|row| (row[0].clone(), row))
+        .collect::<HashMap<_, _>>()
+}
+
 #[test]
 fn test_2bit_bed() {
     run_case(Case {
@@ -354,4 +377,358 @@ fn test_stdin_2bit_gff_gz() {
         region_format: RegionFormat::Gff,
         region_gz: true,
     });
+}
+
+#[test]
+fn test_split_extraction_minus_strand_uses_transcript_order() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t12\ttx_minus\t0\t-\t0\t12\t0,0,0\t2\t4,4\t0,8\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.split_extraction = true;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records
+            .get("tx_minus_EXON1")
+            .map(std::string::String::as_str),
+        Some("CGTA")
+    );
+    assert_eq!(
+        records
+            .get("tx_minus_EXON2")
+            .map(std::string::String::as_str),
+        Some("GGTT")
+    );
+    assert_eq!(records.len(), 2);
+}
+
+#[test]
+fn test_split_extraction_transcript_uses_mixed_piece_names() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t12\ttx_plus\t0\t+\t0\t12\t0,0,0\t2\t4,4\t0,8\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.feature = Feature::Transcript;
+    args.split_extraction = true;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records
+            .get("tx_plus_EXON1")
+            .map(std::string::String::as_str),
+        Some("AACC")
+    );
+    assert_eq!(
+        records
+            .get("tx_plus_INTRON1")
+            .map(std::string::String::as_str),
+        Some("GGTT")
+    );
+    assert_eq!(
+        records
+            .get("tx_plus_EXON2")
+            .map(std::string::String::as_str),
+        Some("TACG")
+    );
+    assert_eq!(records.len(), 3);
+}
+
+#[test]
+fn test_split_extraction_cds_and_utr_piece_names() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let cds_outdir = root.join("cds_out");
+    let utr_outdir = root.join("utr_out");
+
+    write_bytes(&genome_path, b">chr1\nACGTACGTACGTACGTACGT\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t12\ttx_plus\t0\t+\t3\t9\t0,0,0\t2\t4,4\t0,8\n",
+    );
+
+    let mut cds_args = base_args(
+        genome_path.clone(),
+        regions_path.clone(),
+        cds_outdir.clone(),
+    );
+    cds_args.feature = Feature::CDS;
+    cds_args.split_extraction = true;
+    xloci(cds_args);
+
+    let cds_records = read_fasta(cds_outdir.join("output.fa"));
+    assert_eq!(
+        cds_records
+            .get("tx_plus_CDS1")
+            .map(std::string::String::as_str),
+        Some("T")
+    );
+    assert_eq!(
+        cds_records
+            .get("tx_plus_CDS2")
+            .map(std::string::String::as_str),
+        Some("A")
+    );
+
+    let mut utr_args = base_args(genome_path, regions_path, utr_outdir.clone());
+    utr_args.feature = Feature::UTR;
+    utr_args.split_extraction = true;
+    xloci(utr_args);
+
+    let utr_records = read_fasta(utr_outdir.join("output.fa"));
+    assert_eq!(
+        utr_records
+            .get("tx_plus_UTR1")
+            .map(std::string::String::as_str),
+        Some("ACG")
+    );
+    assert_eq!(
+        utr_records
+            .get("tx_plus_UTR2")
+            .map(std::string::String::as_str),
+        Some("CGT")
+    );
+}
+
+#[test]
+fn test_as_tsv_add_tab_with_both_flanks() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_plus\t0\t+\t2\t10\t0,0,0\t2\t2,2\t0,6\nchr1\t2\t10\ttx_minus\t0\t-\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.as_tsv = true;
+    args.add_tab = true;
+    args.upstream_flank = 1;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let rows = rows_to_map(read_tsv(outdir.join("output.tsv")));
+    assert_eq!(
+        rows.get("tx_plus"),
+        Some(&vec![
+            "tx_plus".to_string(),
+            "A".to_string(),
+            "CCTA".to_string(),
+            "CG".to_string()
+        ])
+    );
+    assert_eq!(
+        rows.get("tx_minus"),
+        Some(&vec![
+            "tx_minus".to_string(),
+            "CG".to_string(),
+            "TAGG".to_string(),
+            "T".to_string()
+        ])
+    );
+}
+
+#[test]
+fn test_as_tsv_add_tab_with_single_flank_uses_three_columns() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_plus\t0\t+\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.as_tsv = true;
+    args.add_tab = true;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let rows = read_tsv(outdir.join("output.tsv"));
+    assert_eq!(
+        rows,
+        vec![vec![
+            "tx_plus".to_string(),
+            "CG".to_string(),
+            "CCTA".to_string()
+        ]]
+    );
+}
+
+#[test]
+fn test_split_extraction_as_tsv_add_tab_uses_piece_flanks() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_minus\t0\t-\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.as_tsv = true;
+    args.add_tab = true;
+    args.split_extraction = true;
+    args.upstream_flank = 1;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let rows = rows_to_map(read_tsv(outdir.join("output.tsv")));
+    assert_eq!(
+        rows.get("tx_minus_EXON1"),
+        Some(&vec![
+            "tx_minus_EXON1".to_string(),
+            "CG".to_string(),
+            "TA".to_string(),
+            "A".to_string()
+        ])
+    );
+    assert_eq!(
+        rows.get("tx_minus_EXON2"),
+        Some(&vec![
+            "tx_minus_EXON2".to_string(),
+            "CC".to_string(),
+            "GG".to_string(),
+            "T".to_string()
+        ])
+    );
+}
+
+#[test]
+fn test_split_extraction_is_incompatible_with_translate() {
+    let result = std::panic::catch_unwind(|| {
+        xloci(Args {
+            translate: true,
+            split_extraction: true,
+            ..base_args(
+                PathBuf::from("unused.fa"),
+                PathBuf::from("unused.bed"),
+                PathBuf::from("unused"),
+            )
+        });
+    });
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_add_tab_requires_tsv_and_flanks() {
+    let missing_tsv = std::panic::catch_unwind(|| {
+        xloci(Args {
+            add_tab: true,
+            upstream_flank: 1,
+            ..base_args(
+                PathBuf::from("unused.fa"),
+                PathBuf::from("unused.bed"),
+                PathBuf::from("unused"),
+            )
+        });
+    });
+    assert!(missing_tsv.is_err());
+
+    let missing_flanks = std::panic::catch_unwind(|| {
+        xloci(Args {
+            add_tab: true,
+            as_tsv: true,
+            ..base_args(
+                PathBuf::from("unused.fa"),
+                PathBuf::from("unused.bed"),
+                PathBuf::from("unused"),
+            )
+        });
+    });
+    assert!(missing_flanks.is_err());
+}
+
+#[test]
+fn test_generic_id_joined_uses_feature_bounds_without_flanks() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_minus\t0\t-\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.generic_id = true;
+    args.upstream_flank = 1;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records.get("chr1:2-10(-)").map(std::string::String::as_str),
+        Some("CGTAGGT")
+    );
+}
+
+#[test]
+fn test_generic_id_split_uses_piece_bounds_without_flanks() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_minus\t0\t-\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.generic_id = true;
+    args.split_extraction = true;
+    args.upstream_flank = 1;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records.get("chr1:8-10(-)").map(std::string::String::as_str),
+        Some("CGTAA")
+    );
+    assert_eq!(
+        records.get("chr1:2-4(-)").map(std::string::String::as_str),
+        Some("CCGGT")
+    );
 }

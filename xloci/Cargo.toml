@@ -1,9 +1,9 @@
 [package]
 name = "xloci"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
-license = "MIT"
+license = "Apache-2.0"
 description = "get sequences from 2bit/fa using bed/gtf/gff"
 keywords = ["xloci", "bioinformatics", "sequence", "bed"]
 readme = "../README.md"

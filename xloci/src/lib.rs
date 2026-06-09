@@ -24,6 +24,7 @@
 //!   -L, --level <LEVEL>          Logging verbosity level [default: info]  [possible values: trace, debug, info, warn, error]
 //!   -p, --prefix <PREFIX>        Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz) [default: output]
 //!   -X, --translate              Translate sequences to protein
+//!   -U, --unmask                 Convert soft-masked bases to uppercase in output
 //!   -A, --as-chunk               Keep chunk outputs and skip merging into a single file
 //!   -B, --include-bed            Also emit chunked BED outputs (requires --as-chunk)
 //!   -Z, --compress               Gzip-compress output files

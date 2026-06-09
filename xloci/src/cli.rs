@@ -62,6 +62,10 @@ pub struct Args {
     #[arg(short = 'X', long, default_value = "false", action = ArgAction::SetTrue)]
     pub translate: bool,
 
+    /// Convert soft-masked bases to uppercase in output
+    #[arg(short = 'U', long, default_value = "false", action = ArgAction::SetTrue)]
+    pub unmask: bool,
+
     /// Emit one output record per extracted feature piece
     #[arg(short = 'S', long = "split-extraction", default_value = "false", action = ArgAction::SetTrue)]
     pub split_extraction: bool,
@@ -124,7 +128,7 @@ impl fmt::Display for Args {
 
         write!(
             f,
-            "sequence={}, regions={}, outdir={}, chunks={}, upstream_flank={}, downstream_flank={}, feature={:?}, ignore_errors={}, level={}, prefix={}, translate={}, split_extraction={}, as_tsv={}, add_tab={}, generic_id={}, as_chunk={}, include_bed={}, compress={}",
+            "sequence={}, regions={}, outdir={}, chunks={}, upstream_flank={}, downstream_flank={}, feature={:?}, ignore_errors={}, level={}, prefix={}, translate={}, unmask={}, split_extraction={}, as_tsv={}, add_tab={}, generic_id={}, as_chunk={}, include_bed={}, compress={}",
             sequence,
             self.regions.display(),
             self.outdir.display(),
@@ -136,6 +140,7 @@ impl fmt::Display for Args {
             self.level,
             self.prefix,
             self.translate,
+            self.unmask,
             self.split_extraction,
             self.as_tsv,
             self.add_tab,

@@ -47,6 +47,7 @@ fn base_args(sequence: PathBuf, regions: PathBuf, outdir: PathBuf) -> Args {
         level: log::Level::Info,
         prefix: "output".to_string(),
         translate: false,
+        unmask: false,
         split_extraction: false,
         as_tsv: false,
         add_tab: false,
@@ -377,6 +378,118 @@ fn test_stdin_2bit_gff_gz() {
         region_format: RegionFormat::Gff,
         region_gz: true,
     });
+}
+
+#[test]
+fn test_soft_masking_is_retained_by_default() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAaCcggttTacgatcg\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t4\ttx_plus\t0\t+\t0\t4\t0,0,0\t1\t4\t0\n",
+    );
+
+    xloci(base_args(genome_path, regions_path, outdir.clone()));
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records.get("tx_plus").map(std::string::String::as_str),
+        Some("AaCc")
+    );
+}
+
+#[test]
+fn test_unmask_uppercases_joined_fasta_and_reverse_strand() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAaCcggttTacgatcg\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t4\ttx_plus\t0\t+\t0\t4\t0,0,0\t1\t4\t0\nchr1\t8\t12\ttx_minus\t0\t-\t8\t12\t0,0,0\t1\t4\t0\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.unmask = true;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records.get("tx_plus").map(std::string::String::as_str),
+        Some("AACC")
+    );
+    assert_eq!(
+        records.get("tx_minus").map(std::string::String::as_str),
+        Some("CGTA")
+    );
+}
+
+#[test]
+fn test_unmask_uppercases_tsv_add_tab_columns() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\naAcCgGtTtAcGaTcG\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t2\t10\ttx_plus\t0\t+\t2\t10\t0,0,0\t2\t2,2\t0,6\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.as_tsv = true;
+    args.add_tab = true;
+    args.unmask = true;
+    args.upstream_flank = 1;
+    args.downstream_flank = 2;
+    xloci(args);
+
+    let rows = read_tsv(outdir.join("output.tsv"));
+    assert_eq!(
+        rows,
+        vec![vec![
+            "tx_plus".to_string(),
+            "A".to_string(),
+            "CCTA".to_string(),
+            "CG".to_string()
+        ]]
+    );
+}
+
+#[test]
+fn test_unmask_uppercases_before_translation() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\natggcttaa\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t9\ttx_plus\t0\t+\t0\t9\t0,0,0\t1\t9\t0\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.translate = true;
+    args.unmask = true;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert_eq!(
+        records.get("tx_plus").map(std::string::String::as_str),
+        Some("MA*")
+    );
 }
 
 #[test]

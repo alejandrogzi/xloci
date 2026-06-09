@@ -17,6 +17,7 @@ use rayon::prelude::*;
 use twobit::TwoBitFile;
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fmt::Debug,
     fs::{File, create_dir_all},
@@ -82,6 +83,7 @@ impl OutputFormat {
 /// - `add_tab`: Whether to separate flank columns in TSV output
 /// - `generic_id`: Whether to use genomic coordinates as identifiers
 /// - `translate`: Whether to translate DNA sequences to protein
+/// - `unmask`: Whether to convert soft-masked bases to uppercase in output
 ///
 /// # Example
 ///
@@ -94,6 +96,7 @@ impl OutputFormat {
 ///     add_tab: false,
 ///     generic_id: false,
 ///     translate: false,
+///     unmask: false,
 /// };
 /// ```
 #[derive(Clone, Copy, Debug)]
@@ -103,6 +106,7 @@ struct OutputConfig {
     add_tab: bool,
     generic_id: bool,
     translate: bool,
+    unmask: bool,
 }
 
 /// Type of genomic feature piece being extracted.
@@ -430,6 +434,7 @@ pub fn xloci(args: Args) {
         ignore_errors,
         prefix,
         translate,
+        unmask,
         split_extraction,
         as_tsv,
         add_tab,
@@ -450,6 +455,7 @@ pub fn xloci(args: Args) {
         add_tab,
         generic_id,
         translate,
+        unmask,
     };
 
     let genome = get_sequences(sequence);
@@ -1528,6 +1534,47 @@ fn write_tsv_record(writer: &mut dyn Write, columns: &[&[u8]]) {
     writer.write_all(b"\n").unwrap_or_else(|e| panic!("{}", e));
 }
 
+/// Returns sequence bytes ready for output.
+///
+/// # Arguments
+///
+/// - `sequence`: Sequence bytes to write
+/// - `unmask`: Whether to uppercase soft-masked bases
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use xloci::core::output_sequence;
+/// // assert_eq!(output_sequence(b"aCgT", true).as_ref(), b"ACGT");
+/// ```
+fn output_sequence(sequence: &[u8], unmask: bool) -> Cow<'_, [u8]> {
+    if unmask {
+        Cow::Owned(sequence.to_ascii_uppercase())
+    } else {
+        Cow::Borrowed(sequence)
+    }
+}
+
+/// Converts sequence bytes to uppercase when unmasking is enabled.
+///
+/// # Arguments
+///
+/// - `sequence`: Sequence bytes to update
+/// - `unmask`: Whether to uppercase soft-masked bases
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use xloci::core::unmask_sequence;
+/// // let mut seq = b"aCgT".to_vec();
+/// // unmask_sequence(&mut seq, true);
+/// ```
+fn unmask_sequence(sequence: &mut [u8], unmask: bool) {
+    if unmask {
+        sequence.make_ascii_uppercase();
+    }
+}
+
 /// Writes joined (non-split) feature output in FASTA or TSV format.
 ///
 /// # Arguments
@@ -1553,6 +1600,7 @@ fn write_joined_output(
 ) {
     if output.add_tab {
         let mut core_sequence = extracted.joined_core();
+        unmask_sequence(&mut core_sequence, output.unmask);
         if output.translate {
             core_sequence = translate(&core_sequence);
         }
@@ -1562,21 +1610,24 @@ fn write_joined_output(
             return;
         }
 
+        let prefix_flank = output_sequence(&extracted.prefix_flank, output.unmask);
+        let suffix_flank = output_sequence(&extracted.suffix_flank, output.unmask);
+
         if !extracted.prefix_flank.is_empty() && !extracted.suffix_flank.is_empty() {
             write_tsv_record(
                 writer,
                 &[
                     identifier,
-                    &extracted.prefix_flank,
+                    prefix_flank.as_ref(),
                     &core_sequence,
-                    &extracted.suffix_flank,
+                    suffix_flank.as_ref(),
                 ],
             );
         } else {
             let flank = if !extracted.prefix_flank.is_empty() {
-                &extracted.prefix_flank
+                prefix_flank.as_ref()
             } else {
-                &extracted.suffix_flank
+                suffix_flank.as_ref()
             };
 
             write_tsv_record(writer, &[identifier, flank, &core_sequence]);
@@ -1586,6 +1637,7 @@ fn write_joined_output(
     }
 
     let mut sequence = extracted.joined_sequence();
+    unmask_sequence(&mut sequence, output.unmask);
     if output.translate {
         sequence = translate(&sequence);
     }
@@ -1654,24 +1706,28 @@ fn write_split_output(
         };
 
         if output.add_tab {
+            let prefix_flank = output_sequence(entry.prefix_flank, output.unmask);
+            let sequence = output_sequence(entry.sequence, output.unmask);
+            let suffix_flank = output_sequence(entry.suffix_flank, output.unmask);
+
             if include_prefix_flank && include_suffix_flank {
                 write_tsv_record(
                     writer,
                     &[
                         &split_id,
-                        entry.prefix_flank,
-                        entry.sequence,
-                        entry.suffix_flank,
+                        prefix_flank.as_ref(),
+                        sequence.as_ref(),
+                        suffix_flank.as_ref(),
                     ],
                 );
             } else {
                 let flank = if include_prefix_flank {
-                    entry.prefix_flank
+                    prefix_flank.as_ref()
                 } else {
-                    entry.suffix_flank
+                    suffix_flank.as_ref()
                 };
 
-                write_tsv_record(writer, &[&split_id, flank, entry.sequence]);
+                write_tsv_record(writer, &[&split_id, flank, sequence.as_ref()]);
             }
 
             continue;
@@ -1683,6 +1739,7 @@ fn write_split_output(
         sequence.extend_from_slice(entry.prefix_flank);
         sequence.extend_from_slice(entry.sequence);
         sequence.extend_from_slice(entry.suffix_flank);
+        unmask_sequence(&mut sequence, output.unmask);
 
         if sequence.is_empty() {
             warn!("WARN: empty sequence for record {}", record);

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.6 - 2026-09-05
+
+- Changed `-I, --ignore-errors` so split extraction skips failing pieces with a warning instead of dropping the whole record.
+- Bumped `genepred` to `0.0.16`.
+- Bumped the crate version to `0.0.6`.
+
 ## v0.0.5 - 2026-06-09
 
 - Added `-U, --unmask` to convert soft-masked output sequence bases to uppercase.

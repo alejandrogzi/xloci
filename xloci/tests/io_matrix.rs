@@ -742,6 +742,42 @@ fn test_split_extraction_as_tsv_add_tab_uses_piece_flanks() {
 }
 
 #[test]
+fn test_ignore_errors_skips_underflowing_split_intron() {
+    let temp = TempDir::new().expect("failed to create temporary directory");
+    let root = temp.path();
+    let genome_path = root.join("genome.fa");
+    let regions_path = root.join("regions.bed");
+    let outdir = root.join("out");
+
+    write_bytes(&genome_path, b">chr1\nAACCGGTTTACGATCGAAACCCGGGTTTAAA\n");
+    write_bytes(
+        &regions_path,
+        b"chr1\t0\t30\ttx_plus\t0\t+\t0\t30\t0,0,0\t3\t4,4,4\t0,10,26\n",
+    );
+
+    let mut args = base_args(genome_path, regions_path, outdir.clone());
+    args.feature = Feature::Intron;
+    args.split_extraction = true;
+    args.upstream_flank = 10;
+    args.ignore_errors = true;
+    args.generic_id = true;
+    xloci(args);
+
+    let records = read_fasta(outdir.join("output.fa"));
+    assert!(
+        !records.contains_key("chr1:4-10(+)"),
+        "underflowing intron should be skipped"
+    );
+    assert_eq!(
+        records
+            .get("chr1:14-26(+)")
+            .map(std::string::String::as_str),
+        Some("GGTTTACGATCGAAACCCGGGT")
+    );
+    assert_eq!(records.len(), 1);
+}
+
+#[test]
 fn test_split_extraction_is_incompatible_with_translate() {
     let result = std::panic::catch_unwind(|| {
         xloci(Args {

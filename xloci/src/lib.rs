@@ -20,7 +20,7 @@
 //!   -d, --downstream-flank <DOWNSTREAM_FLANK>
 //!                               Bases to extend downstream of features [default: 0]
 //!   -f, --feature <FEATURE>      Type of genomic feature to extract [default: exon] [possible values: transcript, exon, intron, cds, utr]
-//!   -I, --ignore-errors          Continue processing on errors instead of panicking
+//!   -I, --ignore-errors          Skip failing features with a warning instead of panicking
 //!   -L, --level <LEVEL>          Logging verbosity level [default: info]  [possible values: trace, debug, info, warn, error]
 //!   -p, --prefix <PREFIX>        Stem for output FASTA files (writes <prefix>.fa or <prefix>.fa.gz) [default: output]
 //!   -X, --translate              Translate sequences to protein

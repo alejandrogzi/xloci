@@ -962,7 +962,7 @@ fn write_chunk(
 ///     feature_coord: 5,
 ///     flank: 10,
 /// };
-/// println!("{}", err); // "ERROR: Feature coordinate 5 is underflowing by 10 bases"
+/// println!("{}", err); // "Feature coordinate 5 is underflowing by 10 bases"
 /// ```
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -991,7 +991,7 @@ impl std::fmt::Display for RangeError {
                 flank,
             } => write!(
                 f,
-                "ERROR: Feature coordinate {} is underflowing by {} bases",
+                "Feature coordinate {} is underflowing by {} bases",
                 feature_coord, flank
             ),
             RangeError::Overflow {
@@ -999,7 +999,7 @@ impl std::fmt::Display for RangeError {
                 flank,
             } => write!(
                 f,
-                "ERROR: Feature coordinate {} is overflowing by {} bases",
+                "Feature coordinate {} is overflowing by {} bases",
                 feature_coord, flank
             ),
         }
@@ -1181,63 +1181,71 @@ fn extract_feature(
     let mut pieces = Vec::with_capacity(intervals.len());
     for (idx, (kind, start, end)) in intervals.into_iter().enumerate() {
         let label = match kind {
-            PieceKind::Exon => format!("exon {}", idx),
-            PieceKind::Intron => format!("intron {}", idx),
-            PieceKind::Cds => format!("cds {}", idx),
-            PieceKind::Utr => format!("utr {}", idx),
+            PieceKind::Exon => format!("exon {}", idx + 1),
+            PieceKind::Intron => format!("intron {}", idx + 1),
+            PieceKind::Cds => format!("cds {}", idx + 1),
+            PieceKind::Utr => format!("utr {}", idx + 1),
         };
         let prefix_flank = if split_extraction && upstream_flank > 0 {
-            let flank_start = match start.checked_sub(upstream_flank) {
-                Some(start) => start,
-                None => {
-                    let err = RangeError::Underflow {
-                        feature_coord: start,
-                        flank: upstream_flank,
-                    };
-                    if ignore_errors {
-                        eprintln!("WARN: {} for record {}", err, record);
-                        return None;
-                    } else {
-                        panic!("ERROR: {} for record {}", err, record);
-                    }
+            let Some(flank_start) = start.checked_sub(upstream_flank) else {
+                let err = RangeError::Underflow {
+                    feature_coord: start,
+                    flank: upstream_flank,
+                };
+                if ignore_errors {
+                    eprintln!(
+                        "WARN: skipping {} for record {}: {}; flank could not be reached",
+                        label, record, err
+                    );
+                    continue;
+                } else {
+                    panic!("ERROR: {} for record {}", err, record);
                 }
             };
 
-            extract_range(
+            match extract_range(
                 record,
                 seq,
                 flank_start..start,
                 &format!("{} prefix flank", label),
                 ignore_errors,
-            )?
+            ) {
+                Some(flank) => flank,
+                None => continue,
+            }
         } else {
             Vec::new()
         };
-        let sequence = extract_range(record, seq, start..end, &label, ignore_errors)?;
+        let Some(sequence) = extract_range(record, seq, start..end, &label, ignore_errors) else {
+            continue;
+        };
         let suffix_flank = if split_extraction && downstream_flank > 0 {
-            let flank_end = match end.checked_add(downstream_flank) {
-                Some(end) => end,
-                None => {
-                    let err = RangeError::Overflow {
-                        feature_coord: end,
-                        flank: downstream_flank,
-                    };
-                    if ignore_errors {
-                        eprintln!("WARN: {} for record {}", err, record);
-                        return None;
-                    } else {
-                        panic!("ERROR: {} for record {}", err, record);
-                    }
+            let Some(flank_end) = end.checked_add(downstream_flank) else {
+                let err = RangeError::Overflow {
+                    feature_coord: end,
+                    flank: downstream_flank,
+                };
+                if ignore_errors {
+                    eprintln!(
+                        "WARN: skipping {} for record {}: {}; flank could not be reached",
+                        label, record, err
+                    );
+                    continue;
+                } else {
+                    panic!("ERROR: {} for record {}", err, record);
                 }
             };
 
-            extract_range(
+            match extract_range(
                 record,
                 seq,
                 end..flank_end,
                 &format!("{} suffix flank", label),
                 ignore_errors,
-            )?
+            ) {
+                Some(flank) => flank,
+                None => continue,
+            }
         } else {
             Vec::new()
         };

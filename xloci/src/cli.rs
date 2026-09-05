@@ -46,7 +46,7 @@ pub struct Args {
     #[arg(short = 'f', long, value_enum, default_value = "exon")]
     pub feature: Feature,
 
-    /// Continue processing on errors instead of panicking
+    /// Skip failing features with a warning instead of panicking
     #[arg(short = 'I', long, default_value = "false", action = ArgAction::SetTrue)]
     pub ignore_errors: bool,
 

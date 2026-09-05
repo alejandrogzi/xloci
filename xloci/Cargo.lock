@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "genepred"
-version = "0.0.13"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4de1ae3153e877a8d439a029b96fceb6af0f338c2b2c39da35690f26db446171"
+checksum = "2d325e72bfd34cbe1676162128478838842807898aafb794fd3c822697d887f4"
 dependencies = [
  "flate2",
  "memchr",
@@ -542,7 +542,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "xloci"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clap",
  "flate2",

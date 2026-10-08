@@ -1390,18 +1390,27 @@ fn reverse_complement_in_place(sequence: &mut [u8]) {
 /// assert_eq!(complement_base(b'C'), b'G');
 /// ```
 fn complement_base(base: u8) -> u8 {
-    match base {
+    // INFO: IUPAC ambiguity codes complement too (GRCh38 carries a few); case is kept
+    let upper = match base.to_ascii_uppercase() {
         b'A' => b'T',
         b'C' => b'G',
         b'G' => b'C',
-        b'T' => b'A',
-        b'N' => b'N',
-        b'a' => b't',
-        b'c' => b'g',
-        b'g' => b'c',
-        b't' => b'a',
-        b'n' => b'n',
-        _ => panic!("ERROR: Invalid base"),
+        b'T' | b'U' => b'A',
+        b'R' => b'Y',
+        b'Y' => b'R',
+        b'K' => b'M',
+        b'M' => b'K',
+        b'B' => b'V',
+        b'V' => b'B',
+        b'D' => b'H',
+        b'H' => b'D',
+        b @ (b'S' | b'W' | b'N') => b,
+        _ => panic!("ERROR: Invalid base {:?}", base as char),
+    };
+    if base.is_ascii_lowercase() {
+        upper.to_ascii_lowercase()
+    } else {
+        upper
     }
 }
 
@@ -2198,4 +2207,16 @@ fn translate_codon(codon: &[u8]) -> u8 {
     }
 
     b'X' // INFO: unknown codon
+}
+
+#[cfg(test)]
+mod complement_tests {
+    use super::complement_base;
+
+    #[test]
+    fn complements_iupac_and_keeps_case() {
+        let fwd = b"ACGTNRYKMSWBDHVacgtnry";
+        let rev: Vec<u8> = fwd.iter().map(|&b| complement_base(b)).collect();
+        assert_eq!(rev, b"TGCANYRMKSWVHDBtgcanyr");
+    }
 }

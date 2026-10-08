@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.7
+
+- Reverse-complementing a minus-strand feature no longer panics with `ERROR: Invalid base` on IUPAC ambiguity codes (R, Y, K, M, S, W, B, D, H, V, U). GRCh38 contains a few of these, so ARK's intron extraction crashed on human chr21. They are now complemented with case kept, and the panic for any other byte names the byte.
+
 ## v0.0.6 - 2026-09-05
 
 - Changed `-I, --ignore-errors` so split extraction skips failing pieces with a warning instead of dropping the whole record.
